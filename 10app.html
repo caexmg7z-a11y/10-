@@ -7,7 +7,6 @@
     <style>
         body { background: #000; margin: 0; overflow: hidden; touch-action: none; height: 100vh; }
         .fullscreen { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; }
-        /* 動画は最初は隠し、タップ後に表示 */
         .v-layer { position: absolute; width: 100%; height: 100%; object-fit: cover; display: none; }
         #ui { z-index: 10; color: #39ff14; font-size: 20vw; font-family: monospace; pointer-events: none; }
     </style>
@@ -16,52 +15,65 @@
     <div class="fullscreen">
         <video id="v-perfect" class="v-layer" src="videos/perfect.mp4" playsinline></video>
         <video id="v-success" class="v-layer" src="videos/success.mp4" playsinline></video>
+        <video id="v-near" class="v-layer" src="videos/near.mp4" playsinline></video>
+        <video id="v-miss" class="v-layer" src="videos/miss.mp4" playsinline></video>
         <div id="ui"><div id="timer">0.00</div></div>
     </div>
 
     <script>
         let startTime, isRunning = false, isUnlocked = false;
-        const vPerfect = document.getElementById('v-perfect');
-        const vSuccess = document.getElementById('v-success');
+        const videos = {
+            perfect: document.getElementById('v-perfect'),
+            success: document.getElementById('v-success'),
+            near: document.getElementById('v-near'),
+            miss: document.getElementById('v-miss')
+        };
         const timerUI = document.getElementById('timer');
 
-        // LINE環境での音の制限を解除する「儀式」
         function unlockAudio() {
             if (isUnlocked) return;
-            const videos = [vPerfect, vSuccess];
-            videos.forEach(v => {
+            Object.values(videos).forEach(v => {
                 v.muted = true; v.play(); v.pause(); v.currentTime = 0; v.muted = false;
             });
             isUnlocked = true;
         }
 
-        // 動作をすべて一箇所に絞る
         window.addEventListener('touchstart', (e) => {
             e.preventDefault();
             unlockAudio();
 
             if (!isRunning) {
-                // スタート
                 isRunning = true;
                 startTime = Date.now();
-                requestAnimationFrame(function update() {
-                    if (!isRunning) return;
+                timerUI.style.display = 'block';
+                function update() {
+                    if(!isRunning) return;
                     timerUI.innerText = ((Date.now() - startTime) / 1000).toFixed(2);
                     requestAnimationFrame(update);
-                });
+                }
+                update();
             } else {
-                // ストップ
                 isRunning = false;
                 const elapsed = (Date.now() - startTime) / 1000;
+                const diff = Math.abs(elapsed - 10.00);
                 
-                // 判定：10.00に近いならPerfect、そうでなければSuccess
-                if (Math.abs(elapsed - 10.00) < 0.1) {
-                    vPerfect.style.display = 'block';
-                    vPerfect.play();
-                } else {
-                    vSuccess.style.display = 'block';
-                    vSuccess.play();
-                }
+                let type = 'miss';
+                if (diff <= 0.05) type = 'perfect';
+                else if (diff <= 0.20) type = 'success';
+                else if (diff <= 0.50) type = 'near';
+
+                timerUI.style.display = 'none'; // 演出中数字消去
+                const v = videos[type];
+                v.style.display = 'block';
+                v.play();
+
+                // 2秒後に動画を隠して数字を戻す
+                setTimeout(() => {
+                    v.style.display = 'none';
+                    v.currentTime = 0;
+                    timerUI.innerText = "0.00";
+                    timerUI.style.display = 'block';
+                }, 2000);
             }
         }, { passive: false });
     </script>
