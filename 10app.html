@@ -114,13 +114,13 @@
             transition: all 0.3s ease;
         }
 
-        /* コンプリートした時にちょっと光らせる演出用 */
         .collection-counter.complete {
             border-color: #ffff00;
             box-shadow: 0 0 10px #ffff00;
             color: #ffff00;
         }
 
+        /* 全画面動画レイヤー（スマホ対応強化） */
         #video-layer {
             position: absolute;
             top: 0;
@@ -139,7 +139,7 @@
     <div class="game-window" id="main-window">
         <div class="base-background" id="bg-img"></div>
 
-        <video id="video-layer" playsinline></video>
+        <video id="video-layer" playsinline muted></video>
 
         <div id="game-ui">
             <div class="header-area" id="header-ui">
@@ -153,7 +153,6 @@
             </div>
 
             <div class="footer-area" id="footer-ui">
-                <!-- id="counter-text" を追加してJavaScriptから数字を書き換え可能に -->
                 <div class="collection-counter" id="counter-text">目撃した花火: 0 / 4</div>
             </div>
         </div>
@@ -167,7 +166,6 @@
         let timerInterval;
         let isPerfectDebug = false;
         
-        // 【新設】目撃した花火のコレクションを管理する脳みそ（保存機能付き）
         let unlockedFireworks = JSON.parse(localStorage.getItem('sync10_collection')) || [];
 
         const timerElement = document.getElementById('timer');
@@ -180,7 +178,24 @@
         const mainWindow = document.getElementById('main-window');
         const counterText = document.getElementById('counter-text');
 
-        // 起動時に現在のコレクション数を画面に表示
+        // 【ラグ対策】あらかじめ全動画ファイルをブラウザのキャッシュにブチ込む（プリロード）
+        const videoList = {
+            perfect: "videos/perfect.mp4",
+            success: "videos/saccess.mp4",
+            near: "videos/near.mp4",
+            miss: "videos/miss.mp4"
+        };
+
+        // ページ読み込み時に裏で動画をロードさせておく
+        window.addEventListener('load', () => {
+            for (let key in videoList) {
+                const req = new XMLHttpRequest();
+                req.open('GET', videoList[key], true);
+                req.responseType = 'blob';
+                req.send();
+            }
+        });
+
         updateCounterDisplay();
 
         uiElement.addEventListener('click', (e) => {
@@ -189,6 +204,9 @@
             tapCount++;
 
             if (tapCount === 1) {
+                // 初回タップ時に動画オブジェクトを一瞬「空再生」してスマホブラウザのロックを解除しておく（超重要）
+                videoElement.play().then(() => { videoElement.pause(); }).catch(() => {});
+
                 startTime = Date.now();
                 messageElement.innerText = "ジャストで止めろ！";
                 headerUi.style.visibility = 'hidden';
@@ -219,40 +237,43 @@
             const diff = Math.abs(scoreTime - 10.0);
             
             let resultKey = "miss";
-            let resultVideo = "miss.mp4";
             let neonColor = "#ff0055"; 
             
             if (diff <= 0.05 || isPerfectDebug) {
                 resultKey = "perfect";
-                resultVideo = "perfect.mp4";
                 neonColor = "#ffff00"; 
             } else if (diff <= 0.5) {
                 resultKey = "success";
-                resultVideo = "saccess.mp4"; 
                 neonColor = "#00ff66"; 
             } else if (diff <= 1.0) {
                 resultKey = "near";
-                resultVideo = "near.mp4"; 
                 neonColor = "#ff9900"; 
             }
 
-            // 【新設】出した花火をコレクションに登録（重複は自動でスルー）
             if (!unlockedFireworks.includes(resultKey)) {
                 unlockedFireworks.push(resultKey);
-                // ブラウザの記憶に保存
                 localStorage.setItem('sync10_collection', JSON.stringify(unlockedFireworks));
             }
             updateCounterDisplay();
 
             timerElement.style.textShadow = `0 0 10px #fff, 0 0 20px ${neonColor}, 0 0 30px ${neonColor}`;
 
-            videoElement.src = "videos/" + resultVideo;
+            // 動画のパスをセットして即表示、即再生（すでに裏でロードされているためラグなし）
+            videoElement.src = videoList[resultKey];
             videoElement.style.display = 'block';
-            videoElement.play().catch(err => console.log("動画再生エラー:", err));
+            
+            // スマホの仕様に合わせて確実に再生させる呪文
+            setTimeout(() => {
+                videoElement.play().catch(err => {
+                    console.log("動画即時再生エラー対策:", err);
+                    // 万が一の保険としてもう一回叩く
+                    videoElement.play();
+                });
+            }, 0);
 
             uiElement.style.visibility = 'hidden';
 
-            if (resultVideo !== "perfect.mp4" && !isPerfectDebug) {
+            if (resultKey !== "perfect" && !isPerfectDebug) {
                 setTimeout(() => {
                     uiElement.style.visibility = 'visible';
                     headerUi.style.visibility = 'visible';
@@ -266,12 +287,9 @@
             }
         }
 
-        // 【新設】カウンターの数値を更新する関数
         function updateCounterDisplay() {
             const count = unlockedFireworks.length;
             counterText.innerText = `目撃した花火: ${count} / 4`;
-            
-            // 4種類全部集めたら見た目をハデにする
             if (count === 4) {
                 counterText.classList.add('complete');
                 counterText.innerText = `🎆 花火マスターコンプ！ 4 / 4 🎆`;
@@ -294,7 +312,7 @@
             messageElement.innerText = "タップして点火スタート";
         }
 
-        // デバッグ機能（3点タップ / Pキー）
+        // デバッグ機能
         mainWindow.addEventListener('touchstart', (e) => {
             if (e.touches.length >= 3) {
                 e.preventDefault();
