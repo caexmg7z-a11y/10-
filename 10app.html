@@ -10,23 +10,22 @@
         body { background-color: #030508; color: white; font-family: 'Share Tech Mono', 'Helvetica Neue', Arial, sans-serif; text-align: center; overflow: hidden; width: 100%; height: 100vh; height: 100svh; touch-action: none; }
         .game-fullscreen-container { width: 100%; height: 100%; background: linear-gradient(rgba(3, 5, 8, 0.85), rgba(3, 5, 8, 0.75)), url('videos/image.jpg'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: inset 0 0 60px rgba(0, 242, 254, 0.3); position: relative; overflow: hidden; }
         .bg-video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; display: none; object-fit: cover; }
-        .bg-video.perfect-foreground { z-index: 30 !important; }
         .ui-content { position: relative; z-index: 15; display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; transition: opacity 0.5s ease; opacity: 1; padding: 20px; pointer-events: none; }
         h1 { margin: 0 0 5px 0; font-size: 8vw; letter-spacing: 6px; color: #00f2fe; text-shadow: 0 0 15px rgba(0, 242, 254, 0.6); }
         .mission-text { color: #ff3b30; font-size: 3.5vw; font-weight: bold; letter-spacing: 2px; margin: 0 0 5px 0; padding: 4px 14px; border: 1px solid rgba(255, 59, 48, 0.3); display: inline-block; }
         .secret-info { color: #00f2fe; font-size: 2.8vw; margin: 0 0 20px 0; opacity: 0.8; }
         #timer { font-size: 22vw; font-weight: bold; color: #39ff14; text-shadow: 0 0 15px rgba(57, 255, 20, 0.6); font-variant-numeric: tabular-nums; line-height: 1; }
         #message { font-size: 4vw; color: #ffffff; min-height: 55px; display: flex; align-items: center; justify-content: center; padding: 8px 20px; }
-        .next-btn { position: absolute; bottom: 30px; font-size: 3.5vw; color: #00f2fe; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; padding: 8px 25px; border-radius: 4px; opacity: 0; z-index: 40; }
+        .next-btn { position: absolute; bottom: 30px; font-size: 3.5vw; color: #00f2fe; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; padding: 8px 25px; border-radius: 4px; opacity: 0; z-index: 40; pointer-events: auto; }
         .next-btn.show { opacity: 1; }
     </style>
 </head>
 <body>
     <div class="game-fullscreen-container" id="fullscreen-pad">
         <video id="v-perfect" class="bg-video" src="videos/perfect.mp4" playsinline></video>
-        <video id="v-success" class="bg-video" src="videos/success.mp4" playsinline muted></video>
-        <video id="v-near" class="bg-video" src="videos/near.mp4" playsinline muted></video>
-        <video id="v-miss" class="bg-video" src="videos/miss.mp4" playsinline muted></video>
+        <video id="v-success" class="bg-video" src="videos/success.mp4" playsinline></video>
+        <video id="v-near" class="bg-video" src="videos/near.mp4" playsinline></video>
+        <video id="v-miss" class="bg-video" src="videos/miss.mp4" playsinline></video>
         <div class="ui-content" id="text-group">
             <h1>SYNC 10</h1>
             <div class="mission-text">🎯 MISSION: 10.00s FIREWORKS</div>
@@ -40,7 +39,7 @@
         let startTime, timerInterval, isRunning = false, isShowingResult = false, isAudioUnlocked = false, debugPerfectTriggered = false;
         const fullscreenPad = document.getElementById('fullscreen-pad'), timerElement = document.getElementById('timer'), messageElement = document.getElementById('message'), textGroup = document.getElementById('text-group'), nextBtn = document.getElementById('next-btn');
         const videos = { perfect: document.getElementById('v-perfect'), success: document.getElementById('v-success'), near: document.getElementById('v-near'), miss: document.getElementById('v-miss') };
-        const sounds = { tick: new Audio('sounds/tick.mp3'), flash: new Audio('sounds/flash.mp3'), success: new Audio('sounds/success.mp3'), near: new Audio('sounds/near.mp3'), miss: new Audio('sounds/miss.mp3') };
+        const sounds = { tick: new Audio('sounds/tick.mp3'), success: new Audio('sounds/success.mp3'), near: new Audio('sounds/near.mp3'), miss: new Audio('sounds/miss.mp3') };
         sounds.tick.loop = true;
 
         function unlockAudioEngine() {
@@ -62,8 +61,13 @@
                 isRunning = false; clearInterval(timerInterval); sounds.tick.pause(); sounds.tick.currentTime = 0;
                 textGroup.style.opacity = "0";
                 let t = debugPerfectTriggered ? 10.00 : Number(((Date.now() - startTime) / 1000).toFixed(2));
-                let type = (t === 10.00) ? 'perfect' : (t >= 9.9 && t <= 10.1) ? 'success' : (t >= 9.7 && t <= 10.3) ? 'near' : 'miss';
-                videos[type].style.display = 'block'; videos[type].play();
+                let diff = Math.abs(t - 10.00);
+                let type = (diff <= 0.02) ? 'perfect' : (diff <= 0.20) ? 'success' : (diff <= 0.50) ? 'near' : 'miss';
+                
+                videos[type].style.display = 'block'; 
+                videos[type].play();
+                if(sounds[type]) sounds[type].play();
+                
                 setTimeout(() => { nextBtn.classList.add('show'); isShowingResult = true; }, 1500);
             }
         }
