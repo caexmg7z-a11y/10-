@@ -120,7 +120,6 @@
             color: #ffff00;
         }
 
-        /* 全画面動画レイヤー（スマホ対応強化） */
         #video-layer {
             position: absolute;
             top: 0;
@@ -139,7 +138,7 @@
     <div class="game-window" id="main-window">
         <div class="base-background" id="bg-img"></div>
 
-        <video id="video-layer" playsinline muted></video>
+        <video id="video-layer" playsinline></video>
 
         <div id="game-ui">
             <div class="header-area" id="header-ui">
@@ -166,7 +165,8 @@
         let timerInterval;
         let isPerfectDebug = false;
         
-        let unlockedFireworks = JSON.parse(localStorage.getItem('sync10_collection')) || [];
+        // セッション記憶（開いている間だけ保存、閉じたら0リセット）
+        let unlockedFireworks = JSON.parse(sessionStorage.getItem('sync10_session_collection')) || [];
 
         const timerElement = document.getElementById('timer');
         const messageElement = document.getElementById('message');
@@ -178,7 +178,6 @@
         const mainWindow = document.getElementById('main-window');
         const counterText = document.getElementById('counter-text');
 
-        // 【ラグ対策】あらかじめ全動画ファイルをブラウザのキャッシュにブチ込む（プリロード）
         const videoList = {
             perfect: "videos/perfect.mp4",
             success: "videos/saccess.mp4",
@@ -186,7 +185,7 @@
             miss: "videos/miss.mp4"
         };
 
-        // ページ読み込み時に裏で動画をロードさせておく
+        // 裏側での動画プリロード（ラグ対策）
         window.addEventListener('load', () => {
             for (let key in videoList) {
                 const req = new XMLHttpRequest();
@@ -204,7 +203,8 @@
             tapCount++;
 
             if (tapCount === 1) {
-                // 初回タップ時に動画オブジェクトを一瞬「空再生」してスマホブラウザのロックを解除しておく（超重要）
+                // 初回タップ時に動画の音声ブロックを解除（ミュート解除した状態で一瞬トリガー）
+                videoElement.muted = false;
                 videoElement.play().then(() => { videoElement.pause(); }).catch(() => {});
 
                 startTime = Date.now();
@@ -252,21 +252,20 @@
 
             if (!unlockedFireworks.includes(resultKey)) {
                 unlockedFireworks.push(resultKey);
-                localStorage.setItem('sync10_collection', JSON.stringify(unlockedFireworks));
+                sessionStorage.setItem('sync10_session_collection', JSON.stringify(unlockedFireworks));
             }
             updateCounterDisplay();
 
             timerElement.style.textShadow = `0 0 10px #fff, 0 0 20px ${neonColor}, 0 0 30px ${neonColor}`;
 
-            // 動画のパスをセットして即表示、即再生（すでに裏でロードされているためラグなし）
+            // 動画の音声を有効にしたまま再生
             videoElement.src = videoList[resultKey];
+            videoElement.muted = false;
             videoElement.style.display = 'block';
             
-            // スマホの仕様に合わせて確実に再生させる呪文
             setTimeout(() => {
                 videoElement.play().catch(err => {
-                    console.log("動画即時再生エラー対策:", err);
-                    // 万が一の保険としてもう一回叩く
+                    console.log("動画再生エラー対策:", err);
                     videoElement.play();
                 });
             }, 0);
