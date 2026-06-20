@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SYNC 10</title>
+    <style>
+        /* 画面全体の設定：どこを触っても反応するように */
+        body { 
+            background: #030508; 
+            color: white; 
+            font-family: 'Helvetica Neue', Arial, sans-serif; 
+            text-align: center; 
+            overflow: hidden; 
+            height: 100svh; 
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            touch-action: none; /* スマホの標準ズームなどを禁止 */
+        }
+
+        /* 動画の配置：全画面で表示 */
+        .bg-video { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 2; 
+            display: none; 
+            object-fit: cover; 
+        }
+
+        /* ユーザーインターフェース */
+        #ui { 
+            position: relative; 
+            z-index: 10; 
+            pointer-events: none; /* UIがタップを邪魔しないように */
+        }
+
+        #timer { 
+            font-size: 25vw; 
+            font-weight: bold; 
+            color: #39ff14; 
+            text-shadow: 0 0 20px rgba(57, 255, 20, 0.5);
+            font-variant-numeric: tabular-nums;
+        }
+
+        #status { 
+            font-size: 4vw; 
+            color: #888; 
+            margin-top: 20px; 
+            letter-spacing: 2px;
+        }
+
+        .guide {
+            position: absolute;
+            bottom: 50px;
+            font-size: 3vw;
+            color: #444;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <video id="v-perfect" class="bg-video" src="videos/perfect.mp4" playsinline></video>
+    <video id="v-success" class="bg-video" src="videos/success.mp4" playsinline></video>
+    <video id="v-near" class="bg-video" src="videos/near.mp4" playsinline></video>
+    <video id="v-miss" class="bg-video" src="videos/miss.mp4" playsinline></video>
+
+    <div id="ui">
+        <div id="timer">0.00</div>
+        <div id="status">演出 0/4 | READY</div>
+    </div>
+    
+    <div class="guide">ANYWHERE TAP TO START/STOP</div>
+
+    <script>
+        let startTime, frameId, isRunning = false, unlocked = false;
+        let seen = new Set();
+        
+        // カウント中のBGM設定
+        const tickBgm = new Audio('sounds/tick.mp3');
+        tickBgm.loop = true;
+
+        const timerDisplay = document.getElementById('timer');
+        const statusDisplay = document.getElementById('status');
+        
+        const videos = { 
+            perfect: document.getElementById('v-perfect'), 
+            success: document.getElementById('v-success'), 
+            near: document.getElementById('v-near'), 
+            miss: document.getElementById('v-miss') 
+        };
+
+        // iPhoneの音声制限を解除する関数
+        function unlock() {
+            if (unlocked) return;
+            // 全動画と音声を一瞬再生して即停止することでロックを解除
+            Object.values(videos).forEach(v => { v.muted = true; v.play(); v.pause(); v.currentTime = 0; v.muted = false; });
+            tickBgm.play().then(() => { tickBgm.pause(); tickBgm.currentTime = 0; });
+            unlocked = true;
+        }
+
+        // 画面タップイベント
+        window.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // ブラウザ標準の動作を抑制
+
+            // 【裏技】3点タップで強制パーフェクト
+            if (e.touches.length >= 3) {
+                if (isRunning) {
+                    stopGame(true);
+                    return;
+                }
+            }
+
+            // ロック解除（初回のみ）
+            if (!unlocked) {
+                unlock();
+                return;
+            }
+
+            if (!isRunning) {
+                // スタート処理
+                startGame();
+            } else {
+                // ストップ処理
+                stopGame(false);
+            }
+        }, { passive: false });
+
+        function startGame() {
+            // 前回の動画を隠す
+            Object.values(videos).forEach(v => { v.style.display = 'none'; v.pause(); v.currentTime = 0; });
+            
+            isRunning = true;
+            startTime = performance.now();
+            tickBgm.play(); // カウントBGM開始
+            requestAnimationFrame(update);
+        }
+
+        function update() {
+            if (!isRunning) return;
+            const elapsed = (performance.now() - startTime) / 1000;
+            timerDisplay.innerText = elapsed.toFixed(2);
+            frameId = requestAnimationFrame(update);
+        }
+
+        function stopGame(forcePerfect) {
+            isRunning = false;
+            cancelAnimationFrame(frameId);
+            tickBgm.pause(); // カウントBGM停止
+            tickBgm.currentTime = 0;
+
+            const score = forcePerfect ? 10.00 : parseFloat(timerDisplay.innerText);
+            if (forcePerfect) timerDisplay.innerText = "10.00";
+
+            // 判定ロジック
+            let type = 'miss';
+            const diff = Math.abs(score - 10.00);
+
+            if (diff <= 0.01) type = 'perfect';
+            else if (diff <= 0.20) type = 'success';
+            else if (diff <= 0.50) type = 'near';
+            
+            // 演出の記録
+            seen.add(type);
+            statusDisplay.innerText = `演出 ${seen.size}/4 | ${type.toUpperCase()}`;
+
+            // 結果動画の再生
+            const v = videos[type];
+            v.style.display = 'block';
+            v.play();
+
+            // 4秒後に動画を非表示にする
+            setTimeout(() => {
+                if (!isRunning) { // 次のゲームが始まっていなければ隠す
+                    v.style.display = 'none';
+                }
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
