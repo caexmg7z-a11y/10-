@@ -2,80 +2,57 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SYNC 10</title>
     <style>
-        body { background: #000; margin: 0; overflow: hidden; touch-action: none; height: 100vh; }
-        .fullscreen { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; }
-        .v-layer { position: absolute; width: 100%; height: 100%; object-fit: cover; display: none; }
-        #ui { z-index: 10; color: #39ff14; font-size: 20vw; font-family: monospace; pointer-events: none; }
+        body { margin: 0; overflow: hidden; background: #000; text-align: center; color: white; font-family: sans-serif; }
+        #game-ui { position: absolute; top: 50%; width: 100%; z-index: 10; }
+        #video-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; display: none; z-index: 5; }
     </style>
 </head>
 <body>
-    <div class="fullscreen">
-        <video id="v-perfect" class="v-layer" src="videos/perfect.mp4" playsinline></video>
-        <video id="v-success" class="v-layer" src="videos/success.mp4" playsinline></video>
-        <video id="v-near" class="v-layer" src="videos/near.mp4" playsinline></video>
-        <video id="v-miss" class="v-layer" src="videos/miss.mp4" playsinline></video>
-        <div id="ui"><div id="timer">0.00</div></div>
+
+    <div id="game-ui" onclick="handleTap()">
+        <h1 id="timer">0.00</h1>
+        <p id="message">タップしてスタート</p>
     </div>
 
+    <video id="video-layer" playsinline></video>
+
     <script>
-        let startTime, isRunning = false, isUnlocked = false;
-        const videos = {
-            perfect: document.getElementById('v-perfect'),
-            success: document.getElementById('v-success'),
-            near: document.getElementById('v-near'),
-            miss: document.getElementById('v-miss')
-        };
-        const timerUI = document.getElementById('timer');
+        let tapCount = 0;
+        let startTime;
+        let timerInterval;
 
-        function unlockAudio() {
-            if (isUnlocked) return;
-            Object.values(videos).forEach(v => {
-                v.muted = true; v.play(); v.pause(); v.currentTime = 0; v.muted = false;
-            });
-            isUnlocked = true;
-        }
-
-        window.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            unlockAudio();
-
-            if (!isRunning) {
-                isRunning = true;
+        function handleTap() {
+            tapCount++;
+            if (tapCount === 1) { // スタート
                 startTime = Date.now();
-                timerUI.style.display = 'block';
-                function update() {
-                    if(!isRunning) return;
-                    timerUI.innerText = ((Date.now() - startTime) / 1000).toFixed(2);
-                    requestAnimationFrame(update);
-                }
-                update();
-            } else {
-                isRunning = false;
+                document.getElementById('message').innerText = "計測中...";
+                timerInterval = setInterval(() => {
+                    document.getElementById('timer').innerText = ((Date.now() - startTime) / 1000).toFixed(2);
+                }, 10);
+            } else if (tapCount === 2) { // ストップ
+                clearInterval(timerInterval);
                 const elapsed = (Date.now() - startTime) / 1000;
-                const diff = Math.abs(elapsed - 10.00);
+                document.getElementById('timer').innerText = elapsed.toFixed(2);
+                document.getElementById('message').innerText = "判定中...";
                 
-                let type = 'miss';
-                if (diff <= 0.05) type = 'perfect';
-                else if (diff <= 0.20) type = 'success';
-                else if (diff <= 0.50) type = 'near';
-
-                timerUI.style.display = 'none'; // 演出中数字消去
-                const v = videos[type];
-                v.style.display = 'block';
-                v.play();
-
-                // 2秒後に動画を隠して数字を戻す
-                setTimeout(() => {
-                    v.style.display = 'none';
-                    v.currentTime = 0;
-                    timerUI.innerText = "0.00";
-                    timerUI.style.display = 'block';
-                }, 2000);
+                // ここで動画を再生
+                const video = document.getElementById('video-layer');
+                video.src = "videos/saccess.mp4"; // 後で判定ロジックで切り替え
+                video.style.display = 'block';
+                video.play();
+                
+                // UIを隠す（2秒後）
+                setTimeout(() => { document.getElementById('game-ui').style.display = 'none'; }, 0);
+            } else if (tapCount === 3) { // リセット
+                tapCount = 0;
+                document.getElementById('game-ui').style.display = 'block';
+                document.getElementById('video-layer').style.display = 'none';
+                document.getElementById('timer').innerText = "0.00";
+                document.getElementById('message').innerText = "タップしてスタート";
             }
-        }, { passive: false });
+        }
     </script>
 </body>
 </html>
