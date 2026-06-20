@@ -120,7 +120,8 @@
             color: #ffff00;
         }
 
-        #video-layer {
+        /* 全ビデオ共通のスタイル（最初は一律で非表示） */
+        .video-player {
             position: absolute;
             top: 0;
             left: 0;
@@ -138,7 +139,11 @@
     <div class="game-window" id="main-window">
         <div class="base-background" id="bg-img"></div>
 
-        <video id="video-layer" playsinline></video>
+        <!-- 【大改造】4本のビデオを最初から個別に用意しておく -->
+        <video id="v-perfect" class="video-player" src="videos/perfect.mp4" playsinline></video>
+        <video id="v-success" class="video-player" src="videos/saccess.mp4" playsinline></video>
+        <video id="v-near" class="video-player" class="video-player" src="videos/near.mp4" playsinline></video>
+        <video id="v-miss" class="video-player" src="videos/miss.mp4" playsinline></video>
 
         <div id="game-ui">
             <div class="header-area" id="header-ui">
@@ -164,13 +169,12 @@
         let startTime;
         let timerInterval;
         let isPerfectDebug = false;
+        let currentActiveVideo = null; // 現在再生中のビデオを記憶する用
         
-        // セッション記憶（開いている間だけ保存、閉じたら0リセット）
         let unlockedFireworks = JSON.parse(sessionStorage.getItem('sync10_session_collection')) || [];
 
         const timerElement = document.getElementById('timer');
         const messageElement = document.getElementById('message');
-        const videoElement = document.getElementById('video-layer');
         const uiElement = document.getElementById('game-ui');
         const headerUi = document.getElementById('header-ui');
         const footerUi = document.getElementById('footer-ui');
@@ -178,22 +182,13 @@
         const mainWindow = document.getElementById('main-window');
         const counterText = document.getElementById('counter-text');
 
-        const videoList = {
-            perfect: "videos/perfect.mp4",
-            success: "videos/saccess.mp4",
-            near: "videos/near.mp4",
-            miss: "videos/miss.mp4"
+        // ビデオ要素をまとめて取得
+        const videoElements = {
+            perfect: document.getElementById('v-perfect'),
+            success: document.getElementById('v-success'),
+            near: document.getElementById('v-near'),
+            miss: document.getElementById('v-miss')
         };
-
-        // 裏側での動画プリロード（ラグ対策）
-        window.addEventListener('load', () => {
-            for (let key in videoList) {
-                const req = new XMLHttpRequest();
-                req.open('GET', videoList[key], true);
-                req.responseType = 'blob';
-                req.send();
-            }
-        });
 
         updateCounterDisplay();
 
@@ -203,9 +198,15 @@
             tapCount++;
 
             if (tapCount === 1) {
-                // 初回タップ時に動画の音声ブロックを解除（ミュート解除した状態で一瞬トリガー）
-                videoElement.muted = false;
-                videoElement.play().then(() => { videoElement.pause(); }).catch(() => {});
+                // 【超重要】1回目のタップ時に4本のビデオすべてを「一瞬だけ同時再生⇒即一時停止」する！
+                // これにより、スマホブラウザに全動画の準備運動（デコード）を強制完了させます（音ロックも全解除）
+                for (let key in videoElements) {
+                    let v = videoElements[key];
+                    v.play().then(() => {
+                        v.pause();
+                        v.currentTime = 0;
+                    }).catch(() => {});
+                }
 
                 startTime = Date.now();
                 messageElement.innerText = "ジャストで止めろ！";
@@ -258,17 +259,15 @@
 
             timerElement.style.textShadow = `0 0 10px #fff, 0 0 20px ${neonColor}, 0 0 30px ${neonColor}`;
 
-            // 動画の音声を有効にしたまま再生
-            videoElement.src = videoList[resultKey];
-            videoElement.muted = false;
-            videoElement.style.display = 'block';
+            // 【新ロジック】中身を入れ替えるのではなく、選ばれたビデオを「表示」して再生するだけ！
+            currentActiveVideo = videoElements[resultKey];
+            currentActiveVideo.style.display = 'block';
             
-            setTimeout(() => {
-                videoElement.play().catch(err => {
-                    console.log("動画再生エラー対策:", err);
-                    videoElement.play();
-                });
-            }, 0);
+            // すでに準備運動が終わっているので、呼び出された瞬間（0秒）に音付きで爆速再生されます！
+            currentActiveVideo.play().catch(err => {
+                console.log("ビデオ再生エラーリトライ:", err);
+                currentActiveVideo.play();
+            });
 
             uiElement.style.visibility = 'hidden';
 
@@ -280,7 +279,7 @@
                     messageElement.innerText = "タップしてリセット";
                 }, 2000);
             } else {
-                videoElement.onended = () => {
+                currentActiveVideo.onended = () => {
                     resetGame();
                 };
             }
@@ -300,8 +299,14 @@
             isPerfectDebug = false;
             bgmAudio.pause();
             bgmAudio.currentTime = 0;
-            videoElement.style.display = 'none';
-            videoElement.pause();
+            
+            // 再生中だったビデオを非表示にして停止
+            if (currentActiveVideo) {
+                currentActiveVideo.style.display = 'none';
+                currentActiveVideo.pause();
+                currentActiveVideo.currentTime = 0;
+                currentActiveVideo = null;
+            }
             
             uiElement.style.visibility = 'visible';
             headerUi.style.visibility = 'visible';
