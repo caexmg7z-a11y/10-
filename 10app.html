@@ -7,75 +7,72 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-        body { background-color: #030508; color: white; font-family: 'Share Tech Mono', sans-serif; text-align: center; overflow: hidden; height: 100svh; touch-action: none; }
-        .game-fullscreen-container { width: 100%; height: 100%; background: linear-gradient(rgba(3, 5, 8, 0.85), rgba(3, 5, 8, 0.75)), url('videos/image.jpg'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
+        body { background-color: #030508; color: white; font-family: 'Share Tech Mono', 'Helvetica Neue', Arial, sans-serif; text-align: center; overflow: hidden; width: 100%; height: 100vh; height: 100svh; touch-action: none; }
+        .game-fullscreen-container { width: 100%; height: 100%; background: linear-gradient(rgba(3, 5, 8, 0.85), rgba(3, 5, 8, 0.75)), url('videos/image.jpg'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: inset 0 0 60px rgba(0, 242, 254, 0.3); position: relative; overflow: hidden; }
         .bg-video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; display: none; object-fit: cover; }
-        .ui-content { position: relative; z-index: 15; transition: opacity 0.5s ease; width: 100%; padding: 20px; pointer-events: none; }
-        #timer { font-size: 22vw; font-weight: bold; color: #39ff14; text-shadow: 0 0 15px #39ff14; font-variant-numeric: tabular-nums; }
-        #message { font-size: 4vw; margin-top: 10px; }
-        .next-btn { display: none; position: absolute; bottom: 50px; z-index: 40; padding: 10px 20px; border: 1px solid #00f2fe; color: #00f2fe; }
-        .next-btn.show { display: block; }
+        .bg-video.perfect-foreground { z-index: 30 !important; }
+        .ui-content { position: relative; z-index: 15; display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; transition: opacity 0.5s ease; opacity: 1; padding: 20px; pointer-events: none; }
+        h1 { margin: 0 0 5px 0; font-size: 8vw; letter-spacing: 6px; color: #00f2fe; text-shadow: 0 0 15px rgba(0, 242, 254, 0.6); }
+        .mission-text { color: #ff3b30; font-size: 3.5vw; font-weight: bold; letter-spacing: 2px; margin: 0 0 5px 0; padding: 4px 14px; border: 1px solid rgba(255, 59, 48, 0.3); display: inline-block; }
+        .secret-info { color: #00f2fe; font-size: 2.8vw; margin: 0 0 20px 0; opacity: 0.8; }
+        #timer { font-size: 22vw; font-weight: bold; color: #39ff14; text-shadow: 0 0 15px rgba(57, 255, 20, 0.6); font-variant-numeric: tabular-nums; line-height: 1; }
+        #message { font-size: 4vw; color: #ffffff; min-height: 55px; display: flex; align-items: center; justify-content: center; padding: 8px 20px; }
+        .next-btn { position: absolute; bottom: 30px; font-size: 3.5vw; color: #00f2fe; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; padding: 8px 25px; border-radius: 4px; opacity: 0; z-index: 40; }
+        .next-btn.show { opacity: 1; }
     </style>
 </head>
 <body>
     <div class="game-fullscreen-container" id="fullscreen-pad">
         <video id="v-perfect" class="bg-video" src="videos/perfect.mp4" playsinline></video>
-        <video id="v-success" class="bg-video" src="videos/success.mp4" playsinline></video>
-        <video id="v-near" class="bg-video" src="videos/near.mp4" playsinline></video>
-        <video id="v-miss" class="bg-video" src="videos/miss.mp4" playsinline></video>
+        <video id="v-success" class="bg-video" src="videos/success.mp4" playsinline muted></video>
+        <video id="v-near" class="bg-video" src="videos/near.mp4" playsinline muted></video>
+        <video id="v-miss" class="bg-video" src="videos/miss.mp4" playsinline muted></video>
         <div class="ui-content" id="text-group">
+            <h1>SYNC 10</h1>
+            <div class="mission-text">🎯 MISSION: 10.00s FIREWORKS</div>
+            <div class="secret-info">🎁 SECRET VIDEO: TOTAL 4 TYPES</div>
             <div id="timer">0.00</div>
             <div id="message">READY TO IGNITE</div>
         </div>
         <div id="next-btn" class="next-btn">TAP TO RESTART</div>
     </div>
-
     <script>
-        let startTime, timerInterval, isRunning = false;
-        const timerElement = document.getElementById('timer');
-        const textGroup = document.getElementById('text-group');
-        const nextBtn = document.getElementById('next-btn');
+        let startTime, timerInterval, isRunning = false, isShowingResult = false, isAudioUnlocked = false, debugPerfectTriggered = false;
+        const fullscreenPad = document.getElementById('fullscreen-pad'), timerElement = document.getElementById('timer'), messageElement = document.getElementById('message'), textGroup = document.getElementById('text-group'), nextBtn = document.getElementById('next-btn');
         const videos = { perfect: document.getElementById('v-perfect'), success: document.getElementById('v-success'), near: document.getElementById('v-near'), miss: document.getElementById('v-miss') };
+        const sounds = { tick: new Audio('sounds/tick.mp3'), flash: new Audio('sounds/flash.mp3'), success: new Audio('sounds/success.mp3'), near: new Audio('sounds/near.mp3'), miss: new Audio('sounds/miss.mp3') };
+        sounds.tick.loop = true;
 
-        window.addEventListener('touchstart', (e) => {
-            // 3点タップでPERFECT（裏技）
-            if (e.touches.length >= 3) { if(isRunning) stopGame(true); return; }
-            
-            if (isRunning) { stopGame(false); }
-            else { startGame(); }
+        function unlockAudioEngine() {
+            if (isAudioUnlocked) return;
+            isAudioUnlocked = true;
+            Object.values(sounds).forEach(s => s.play().then(() => { s.pause(); s.currentTime = 0; }).catch(() => {}));
+            Object.values(videos).forEach(v => { v.load(); v.play().then(() => { v.pause(); v.currentTime = 0; }).catch(() => {}); });
+        }
+
+        function triggerGameAction() {
+            if (isShowingResult) { resetToReadyState(); return; }
+            if (!isRunning) {
+                isRunning = true; startTime = Date.now();
+                textGroup.style.opacity = "1";
+                messageElement.innerText = "⚡ IGNITION...";
+                sounds.tick.play();
+                timerInterval = setInterval(() => { timerElement.innerText = ((Date.now() - startTime) / 1000).toFixed(2); }, 10);
+            } else {
+                isRunning = false; clearInterval(timerInterval); sounds.tick.pause(); sounds.tick.currentTime = 0;
+                textGroup.style.opacity = "0";
+                let t = debugPerfectTriggered ? 10.00 : Number(((Date.now() - startTime) / 1000).toFixed(2));
+                let type = (t === 10.00) ? 'perfect' : (t >= 9.9 && t <= 10.1) ? 'success' : (t >= 9.7 && t <= 10.3) ? 'near' : 'miss';
+                videos[type].style.display = 'block'; videos[type].play();
+                setTimeout(() => { nextBtn.classList.add('show'); isShowingResult = true; }, 1500);
+            }
+        }
+        function resetToReadyState() { isShowingResult = false; debugPerfectTriggered = false; nextBtn.classList.remove('show'); Object.values(videos).forEach(v => { v.style.display = 'none'; v.pause(); v.currentTime = 0; }); timerElement.innerText = "0.00"; textGroup.style.opacity = "1"; }
+        window.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'touch' && e.isPrimary === false) debugPerfectTriggered = true;
+            unlockAudioEngine(); e.preventDefault(); triggerGameAction();
         }, { passive: false });
-
-        function startGame() {
-            isRunning = true;
-            startTime = Date.now();
-            textGroup.style.opacity = "1";
-            timerInterval = setInterval(() => {
-                timerElement.innerText = ((Date.now() - startTime) / 1000).toFixed(2);
-            }, 10);
-        }
-
-        function stopGame(forcePerfect) {
-            isRunning = false;
-            clearInterval(timerInterval);
-            textGroup.style.opacity = "0"; // 演出中は数字を消す
-            
-            let time = forcePerfect ? 10.00 : parseFloat(timerElement.innerText);
-            let type = (time === 10.00) ? 'perfect' : (time >= 9.9 && time <= 10.1) ? 'success' : (time >= 9.7 && time <= 10.3) ? 'near' : 'miss';
-            
-            const v = videos[type];
-            v.style.display = 'block';
-            v.play();
-            
-            setTimeout(() => { nextBtn.classList.add('show'); }, 3000);
-        }
-
-        nextBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            nextBtn.classList.remove('show');
-            timerElement.innerText = "0.00";
-            textGroup.style.opacity = "1";
-            Object.values(videos).forEach(v => { v.style.display = 'none'; v.pause(); v.currentTime = 0; });
-        });
+        nextBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); resetToReadyState(); });
     </script>
 </body>
 </html>
